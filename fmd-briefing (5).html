@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F&MD — Gerador de Briefing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<style>
+:root{
+  --accent:#E1FF15;--black:#000;--white:#fff;
+  --g900:#0A0A0A;--g800:#111;--g700:#1A1A1A;--g600:#222;--g500:#333;--g400:#555;--g300:#888;--g200:#BBB;
+  --fd:'Barlow Condensed',sans-serif;--fb:'Barlow',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--g900);color:var(--white);font-family:var(--fb);font-weight:300;min-height:100vh;overflow-x:hidden}
+::selection{background:var(--accent);color:var(--black)}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--g800)}
+::-webkit-scrollbar-thumb{background:var(--g500)}::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+.wrap{max-width:920px;margin:0 auto;padding:0 2rem 6rem}
+
+/* HEADER */
+.site-header{display:flex;align-items:center;justify-content:space-between;padding:2rem 0 2rem;border-bottom:1px solid var(--g600);margin-bottom:2rem}
+.logo{font-family:var(--fd);font-size:28px;font-weight:900;letter-spacing:.04em;color:var(--white);text-transform:uppercase;line-height:1}
+.logo span{color:var(--accent)}
+.header-tag{font-family:var(--fd);font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--g300)}
+
+/* SETUP SCREEN */
+.setup-screen{min-height:60vh;display:flex;flex-direction:column;justify-content:center;padding:3rem 0}
+.setup-screen h2{font-family:var(--fd);font-size:clamp(36px,5vw,56px);font-weight:900;text-transform:uppercase;line-height:.95;color:var(--white);margin-bottom:1rem}
+.setup-screen h2 em{font-style:normal;color:var(--accent);display:block}
+.setup-screen p{font-size:14px;color:var(--g300);max-width:520px;line-height:1.6;margin-bottom:2rem}
+.setup-card{background:var(--g800);border:1px solid var(--g600);padding:2rem}
+.setup-card .slabel{margin-top:0}
+.setup-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;margin-bottom:1rem}
+.setup-row input{background:var(--g700);border:1px solid var(--g500);color:var(--white);font-family:var(--fb);font-size:13px;padding:10px 12px;outline:none;width:100%;transition:border-color .15s}
+.setup-row input:focus{border-color:var(--accent)}
+.setup-row input::placeholder{color:var(--g400)}
+.setup-note{font-size:11px;color:var(--g400);line-height:1.55;margin-top:.5rem}
+.setup-note a{color:var(--accent);text-decoration:none}
+.setup-note a:hover{text-decoration:underline}
+.setup-note strong{color:var(--g200)}
+.setup-err{font-size:12px;color:#FF6B35;margin-top:.5rem;display:none}
+
+/* PAGE TITLE */
+.page-title{margin-bottom:2rem}
+.page-title h1{font-family:var(--fd);font-size:clamp(36px,5vw,60px);font-weight:900;text-transform:uppercase;letter-spacing:-.01em;line-height:.95;color:var(--white)}
+.page-title h1 em{font-style:normal;color:var(--accent);display:block}
+.page-title p{margin-top:.7rem;font-size:13px;color:var(--g300);max-width:520px;line-height:1.6;font-weight:300}
+
+/* WORKER CONFIG STRIP */
+.worker-strip{display:flex;align-items:center;gap:10px;background:var(--g800);border:1px solid var(--g600);padding:.7rem 1rem;margin-bottom:2rem;font-size:11px;color:var(--g300)}
+.worker-strip .wdot{width:8px;height:8px;border-radius:50%;background:#FF6B35;flex-shrink:0}
+.worker-strip .wdot.ok{background:#4CAF50}
+.worker-strip span{flex:1}
+.worker-strip a{color:var(--accent);text-decoration:none;font-size:10px;flex-shrink:0}
+
+/* STEPS */
+.steps{display:flex;margin-bottom:2rem;position:relative}
+.steps::before{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:var(--g600)}
+.step-item{flex:1;padding-bottom:.7rem;position:relative;cursor:pointer}
+.step-item::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:2px;background:transparent;transition:background .2s}
+.step-item.active::after{background:var(--accent)}
+.step-item.done::after{background:var(--g500)}
+.step-nl{font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--g500);margin-bottom:3px}
+.step-item.active .step-nl{color:var(--accent)}
+.step-tt{font-family:var(--fd);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--g500)}
+.step-item.active .step-tt{color:var(--white)}
+.step-item.done .step-tt{color:var(--g400)}
+
+/* PANELS */
+.panel{display:none;animation:fadeUp .2s ease}
+.panel.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* SECTION LABEL */
+.slabel{font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--g400);margin-bottom:.8rem;margin-top:1.8rem;display:flex;align-items:center;gap:10px}
+.slabel:first-child{margin-top:0}
+.slabel::after{content:'';flex:1;height:1px;background:var(--g600)}
+
+/* PHASE HEADER */
+.phase-header{display:flex;align-items:center;gap:14px;margin-bottom:1.4rem;padding-bottom:.9rem;border-bottom:1px solid var(--g700)}
+.phase-num{font-family:var(--fd);font-size:40px;font-weight:900;color:var(--accent);line-height:1;min-width:46px}
+.phase-info h2{font-family:var(--fd);font-size:17px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--white)}
+.phase-info p{font-size:11px;color:var(--g300);margin-top:3px}
+
+/* UPLOAD GRID */
+.upload-grid{display:grid;gap:1px;background:var(--g600);border:1px solid var(--g600);margin-bottom:1.8rem}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.grid-1{grid-template-columns:1fr}
+.upload-card{background:var(--g800);padding:1.2rem}
+.uc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.4rem}
+.uc-title{font-family:var(--fd);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--white);line-height:1.2}
+.uc-sub{font-size:11px;color:var(--g300);margin-bottom:.7rem;line-height:1.4}
+.badge{font-family:var(--fd);font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:3px 7px}
+.badge-req{background:var(--accent);color:var(--black)}
+.badge-opt{background:var(--g600);color:var(--g200)}
+
+/* METHOD TABS */
+.method-tabs{display:flex;gap:1px;background:var(--g600);margin-bottom:.6rem}
+.mtab{flex:1;font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:5px 4px;text-align:center;cursor:pointer;background:var(--g700);color:var(--g300);border:none;transition:all .15s}
+.mtab.active{background:var(--g500);color:var(--white)}
+.method-panel{display:none}.method-panel.active{display:block}
+
+/* FILE DROP */
+.file-drop-zone{border:1px dashed var(--g500);padding:.9rem;text-align:center;cursor:pointer;transition:all .15s;display:block}
+.file-drop-zone:hover{border-color:var(--accent);background:rgba(225,255,21,.04)}
+.file-drop-zone.has-file{border-style:solid;border-color:var(--accent);background:rgba(225,255,21,.06)}
+.file-drop-zone input{display:none}
+.fdz-icon{font-size:16px;margin-bottom:3px;opacity:.5;display:block}
+.file-drop-zone.has-file .fdz-icon{opacity:1}
+.fdz-text{font-size:11px;color:var(--g300)}
+.file-drop-zone.has-file .fdz-text{color:var(--accent);font-weight:500}
+
+/* LINK INPUT */
+.link-input-wrap{position:relative}
+.link-input-wrap input{width:100%;background:var(--g700);border:1px solid var(--g500);color:var(--white);font-family:var(--fb);font-size:12px;padding:8px 32px 8px 10px;outline:none;transition:border-color .15s}
+.link-input-wrap input:focus{border-color:var(--accent)}
+.link-input-wrap input::placeholder{color:var(--g400)}
+.link-ok{position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--accent);display:none}
+.field-hint{font-size:10px;color:var(--g400);margin-top:4px;line-height:1.4}
+.fetch-status{font-size:10px;margin-top:3px;display:none}
+.fetch-status.loading{color:var(--g300);display:block}
+.fetch-status.done{color:#4CAF50;display:block}
+.fetch-status.fail{color:#FF6B35;display:block}
+
+/* FORM */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--g600);border:1px solid var(--g600);margin-bottom:.5rem}
+.form-grid .full{grid-column:1/-1}
+.field{background:var(--g800);padding:.9rem 1.2rem;display:flex;flex-direction:column;gap:5px;transition:background .15s}
+.field:focus-within{background:var(--g700)}
+.field label{font-family:var(--fd);font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--g300)}
+.field:focus-within label{color:var(--accent)}
+.field input,.field select,.field textarea{background:transparent;border:none;border-bottom:1px solid var(--g600);color:var(--white);font-family:var(--fb);font-size:13px;font-weight:400;padding:5px 0;outline:none;width:100%;transition:border-color .15s}
+.field input::placeholder,.field textarea::placeholder{color:var(--g500)}
+.field input:focus,.field select:focus,.field textarea:focus{border-bottom-color:var(--accent)}
+.field select{cursor:pointer;appearance:none}
+.field select option{background:var(--g800);color:var(--white)}
+.field textarea{resize:vertical;min-height:72px;line-height:1.5}
+.field .hint{font-size:10px;color:var(--g400);margin-top:2px}
+
+/* BUTTONS */
+.action-row{display:flex;justify-content:flex-end;gap:10px;margin-top:1.8rem}
+.btn{font-family:var(--fd);font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:12px 24px;border:none;cursor:pointer;transition:all .15s}
+.btn-ghost{background:transparent;border:1px solid var(--g500);color:var(--g300)}
+.btn-ghost:hover{border-color:var(--white);color:var(--white)}
+.btn-primary{background:var(--accent);color:var(--black)}
+.btn-primary:hover{background:#f0ff50;transform:translateY(-1px)}
+.btn-primary:active{transform:translateY(0)}
+.btn-primary:disabled{background:var(--g600);color:var(--g400);cursor:not-allowed;transform:none}
+
+/* GENERATING */
+.generating{padding:4rem 0;text-align:center}
+.gen-logo{font-family:var(--fd);font-size:52px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:var(--white);margin-bottom:1.8rem;animation:pulse 2s ease-in-out infinite}
+.gen-logo span{color:var(--accent)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.gen-bar-wrap{width:260px;height:2px;background:var(--g700);margin:0 auto 1rem;overflow:hidden}
+.gen-bar{height:100%;background:var(--accent);width:0%;transition:width .5s ease}
+.gen-status{font-size:12px;color:var(--g300);letter-spacing:.03em}
+
+/* RESULT */
+.result-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:1.4rem;padding-bottom:1rem;border-bottom:1px solid var(--g600)}
+.res-title-lbl{font-family:var(--fd);font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--g400);margin-bottom:4px}
+.res-name{font-family:var(--fd);font-size:26px;font-weight:900;text-transform:uppercase;letter-spacing:.02em;color:var(--white);line-height:1}
+.res-meta{display:flex;gap:18px;font-size:12px;color:var(--g300)}
+.res-meta strong{display:block;font-family:var(--fd);font-size:9px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--g500);margin-bottom:2px}
+
+/* ACCORDION */
+.accordion{display:flex;flex-direction:column;gap:1px;background:var(--g600);border:1px solid var(--g600)}
+.acc-item{background:var(--g800)}
+.acc-header{display:flex;align-items:center;justify-content:space-between;padding:.8rem 1.2rem;cursor:pointer;transition:background .15s;user-select:none}
+.acc-header:hover{background:var(--g700)}
+.acc-left{display:flex;align-items:center;gap:12px}
+.acc-num{font-family:var(--fd);font-size:11px;font-weight:700;color:var(--accent);letter-spacing:.1em;min-width:20px}
+.acc-title{font-family:var(--fd);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--white)}
+.acc-arrow{width:12px;height:12px;border-right:2px solid var(--g500);border-bottom:2px solid var(--g500);transform:rotate(45deg);transition:transform .2s,border-color .15s;flex-shrink:0}
+.acc-item.open .acc-arrow{transform:rotate(-135deg);border-color:var(--accent)}
+.acc-body{display:none;padding:0 1.2rem 1.2rem}
+.acc-item.open .acc-body{display:block}
+.rf-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--g700);margin-top:1px}
+.rf-item{background:var(--g900);padding:.8rem .9rem;display:flex;flex-direction:column;gap:4px}
+.rf-item.full{grid-column:1/-1}
+.rf-label{font-family:var(--fd);font-size:9px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--g500)}
+.rf-value{font-size:12px;color:var(--white);line-height:1.55;font-weight:300;outline:none;border-bottom:1px solid transparent;padding-bottom:2px;transition:border-color .15s;min-height:18px;white-space:pre-wrap}
+.rf-value:focus{border-bottom-color:var(--accent)}
+.rf-value.missing{color:var(--g500);font-style:italic}
+
+/* COPY BAR */
+.copy-bar{display:flex;align-items:center;justify-content:space-between;margin-top:1.8rem;padding:.9rem 1.2rem;border:1px solid var(--g600);background:var(--g800);flex-wrap:wrap;gap:.8rem}
+.copy-bar-note{font-size:11px;color:var(--g400)}
+.copy-bar-note strong{color:var(--accent);font-weight:500}
+
+/* MISSING DOT */
+.missing-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--g500);margin-left:8px;vertical-align:middle}
+.acc-item.has-missing .missing-dot{background:#FF6B35}
+
+/* TOAST */
+.toast{position:fixed;bottom:2rem;right:2rem;background:var(--accent);color:var(--black);font-family:var(--fd);font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:12px 20px;transform:translateY(100px);opacity:0;transition:all .25s ease;z-index:999}
+.toast.show{transform:translateY(0);opacity:1}
+
+/* ERROR */
+.error-view{text-align:center;padding:3rem 0}
+.error-view h3{font-family:var(--fd);font-size:20px;font-weight:800;text-transform:uppercase;color:#FF6B35;margin-bottom:8px}
+.error-view p{font-size:13px;color:var(--g300);margin-bottom:1.5rem;max-width:460px;margin-left:auto;margin-right:auto;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="site-header">
+  <div class="logo">F<span>&</span>MD</div>
+  <div class="header-tag">Gerador de Briefing — Imobiliário</div>
+</header>
+
+<!-- ══ SETUP SCREEN (shown until Worker URL + API key are set) ══ -->
+<div id="setup-screen" class="setup-screen" style="display:none">
+  <h2>Configure<em>para começar.</em></h2>
+  <p>Este app usa um Worker Cloudflare como proxy seguro para a API de IA. Configure uma vez — funciona para todo o time, sem instalar nada.</p>
+  <div class="setup-card">
+    <div class="slabel">URL do Worker Cloudflare</div>
+    <div class="setup-row">
+      <input type="url" id="cfg-worker" placeholder="https://fmd-briefing.seu-nome.workers.dev" autocomplete="off">
+      <button class="btn btn-ghost" onclick="testWorker()">Testar</button>
+    </div>
+    <div class="setup-err" id="worker-err">Não foi possível conectar. Verifique a URL.</div>
+    <div class="setup-note">
+      Não tem um Worker ainda? <a href="#" onclick="showWorkerInstructions()">Veja como criar em 3 minutos →</a>
+    </div>
+
+    <div class="slabel" style="margin-top:1.5rem">Chave API Anthropic</div>
+    <div class="setup-row">
+      <input type="password" id="cfg-apikey" placeholder="sk-ant-api03-..." autocomplete="off" spellcheck="false">
+      <button class="btn btn-primary" id="btn-start" onclick="saveConfig()">Salvar e iniciar →</button>
+    </div>
+    <div class="setup-err" id="apikey-err">Chave inválida. Deve começar com sk-ant-</div>
+    <div class="setup-note">
+      Obtenha sua chave em <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a><br>
+      <strong>Sua chave fica salva só neste navegador</strong> — nunca enviada a servidores além da API da Anthropic.
+    </div>
+  </div>
+
+  <!-- Worker instructions (hidden by default) -->
+  <div id="worker-instructions" style="display:none;margin-top:1.5rem;background:var(--g800);border:1px solid var(--g600);padding:1.5rem">
+    <div class="slabel" style="margin-top:0">Como criar o Worker em 3 minutos</div>
+    <ol style="font-size:13px;color:var(--g200);line-height:2;padding-left:1.2rem">
+      <li>Acesse <a href="https://dash.cloudflare.com" target="_blank" style="color:var(--accent)">dash.cloudflare.com</a> e faça login (conta gratuita)</li>
+      <li>Menu lateral → <strong>Workers &amp; Pages</strong> → <strong>Create</strong></li>
+      <li>Escolha <strong>Create Worker</strong> → clique em <strong>Deploy</strong></li>
+      <li>Clique em <strong>Edit code</strong>, apague tudo e cole o conteúdo do arquivo <code style="color:var(--accent)">worker.js</code></li>
+      <li>Clique em <strong>Deploy</strong> — copie a URL gerada (ex: <code style="color:var(--accent)">fmd-briefing.seu.workers.dev</code>)</li>
+      <li>Cole essa URL no campo acima e configure sua chave API</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ══ MAIN APP (hidden until configured) ══ -->
+<div id="main-app" style="display:none">
+
+  <div class="page-title">
+    <h1>Briefing<em>Inteligente.</em></h1>
+    <p>Preencha as 4 fases, a IA lê todos os materiais e links, e você baixa o briefing completo em .docx.</p>
+  </div>
+
+  <!-- Worker status strip -->
+  <div class="worker-strip" id="worker-strip">
+    <div class="wdot ok" id="wdot"></div>
+    <span id="worker-url-display">—</span>
+    <a href="#" onclick="resetConfig()">Reconfigurar</a>
+  </div>
+
+  <div class="steps">
+    <div class="step-item active" id="stab-1" onclick="jumpTo(1)"><div class="step-nl">Fase 01</div><div class="step-tt">Landing Page</div></div>
+    <div class="step-item" id="stab-2" onclick="jumpTo(2)"><div class="step-nl">Fase 02</div><div class="step-tt">Book</div></div>
+    <div class="step-item" id="stab-3" onclick="jumpTo(3)"><div class="step-nl">Fase 03</div><div class="step-tt">Criativos</div></div>
+    <div class="step-item" id="stab-4" onclick="jumpTo(4)"><div class="step-nl">Fase 04</div><div class="step-tt">Detalhamento</div></div>
+    <div class="step-item" id="stab-5" onclick="jumpTo(5)"><div class="step-nl">Fase 05</div><div class="step-tt">Gerar</div></div>
+  </div>
+
+  <!-- ═ FASE 1 ═ -->
+  <div class="panel active" id="panel-1">
+    <div class="phase-header"><div class="phase-num">01</div><div class="phase-info"><h2>Landing Page ou Site</h2><p>Principal fonte de dados do empreendimento</p></div></div>
+    <div class="slabel">Referência da LP</div>
+    <div class="upload-grid grid-1">
+      <div class="upload-card">
+        <div class="uc-top"><div class="uc-title">Landing Page / Site do empreendimento</div><span class="badge badge-req">Obrigatório</span></div>
+        <div class="uc-sub">Adicione o link da LP ou faça upload do PDF / printscreen</div>
+        <div class="method-tabs">
+          <button class="mtab active" onclick="switchMethod('lp','link',this)">Link / URL</button>
+          <button class="mtab" onclick="switchMethod('lp','file',this)">Upload de arquivo</button>
+        </div>
+        <div class="method-panel active" id="lp-method-link">
+          <div class="link-input-wrap">
+            <input type="url" id="lp-url" placeholder="https://empreendimento.com.br" oninput="onUrlInput('lp')">
+            <span class="link-ok" id="lp-url-ok">✓</span>
+          </div>
+          <div class="fetch-status" id="lp-fetch-status"></div>
+          <div class="field-hint">O Worker vai ler o conteúdo da página automaticamente</div>
+        </div>
+        <div class="method-panel" id="lp-method-file">
+          <label class="file-drop-zone" id="fdz-lp">
+            <input type="file" id="file-lp" accept=".pdf,.png,.jpg,.jpeg" onchange="handleFile('lp',this)">
+            <span class="fdz-icon" id="icon-lp">↑</span>
+            <span class="fdz-text" id="text-lp">Clique ou arraste (PDF, PNG, JPG)</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-primary" id="btn-1" onclick="goStep(2)" disabled>Continuar →</button>
+    </div>
+  </div>
+
+  <!-- ═ FASE 2 ═ -->
+  <div class="panel" id="panel-2">
+    <div class="phase-header"><div class="phase-num">02</div><div class="phase-info"><h2>Book do Empreendimento</h2><p>Ficha técnica, planta, diferenciais e lazer</p></div></div>
+    <div class="slabel">Arquivo ou link do book (opcional)</div>
+    <div class="upload-grid grid-1">
+      <div class="upload-card">
+        <div class="uc-top"><div class="uc-title">Book / Material técnico do produto</div><span class="badge badge-opt">Opcional</span></div>
+        <div class="uc-sub">Upload do PDF ou link do Google Drive com o book completo</div>
+        <div class="method-tabs">
+          <button class="mtab active" onclick="switchMethod('book','file',this)">Upload PDF</button>
+          <button class="mtab" onclick="switchMethod('book','link',this)">Link Google Drive</button>
+        </div>
+        <div class="method-panel active" id="book-method-file">
+          <label class="file-drop-zone" id="fdz-book">
+            <input type="file" id="file-book" accept=".pdf,.png,.jpg,.jpeg" onchange="handleFile('book',this)">
+            <span class="fdz-icon" id="icon-book">↑</span>
+            <span class="fdz-text" id="text-book">Clique ou arraste o PDF do book</span>
+          </label>
+        </div>
+        <div class="method-panel" id="book-method-link">
+          <div class="link-input-wrap">
+            <input type="url" id="book-url" placeholder="https://drive.google.com/file/d/..." oninput="onUrlInput('book')">
+            <span class="link-ok" id="book-url-ok">✓</span>
+          </div>
+          <div class="fetch-status" id="book-fetch-status"></div>
+          <div class="field-hint">Link de compartilhamento público — o Worker busca o conteúdo</div>
+        </div>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-ghost" onclick="goStep(1)">← Voltar</button>
+      <button class="btn btn-primary" onclick="goStep(3)">Continuar →</button>
+    </div>
+  </div>
+
+  <!-- ═ FASE 3 ═ -->
+  <div class="panel" id="panel-3">
+    <div class="phase-header"><div class="phase-num">03</div><div class="phase-info"><h2>Criativos Anteriores</h2><p>Referências de campanhas — todos opcionais</p></div></div>
+    <div class="slabel">Referências criativas</div>
+    <div class="upload-grid grid-3">
+      <div class="upload-card">
+        <div class="uc-top"><div class="uc-title">Figma</div><span class="badge badge-opt">Opcional</span></div>
+        <div class="uc-sub">Link do projeto com KVs e criativos anteriores</div>
+        <div class="link-input-wrap">
+          <input type="url" id="figma-url" placeholder="https://figma.com/design/..." oninput="onUrlInput('figma')">
+          <span class="link-ok" id="figma-url-ok">✓</span>
+        </div>
+        <div class="fetch-status" id="figma-fetch-status"></div>
+      </div>
+      <div class="upload-card">
+        <div class="uc-top"><div class="uc-title">Google Drive</div><span class="badge badge-opt">Opcional</span></div>
+        <div class="uc-sub">Pasta com peças, vídeos ou artes da campanha</div>
+        <div class="link-input-wrap">
+          <input type="url" id="drive-url" placeholder="https://drive.google.com/..." oninput="onUrlInput('drive')">
+          <span class="link-ok" id="drive-url-ok">✓</span>
+        </div>
+        <div class="fetch-status" id="drive-fetch-status"></div>
+      </div>
+      <div class="upload-card">
+        <div class="uc-top"><div class="uc-title">Doc de Copy</div><span class="badge badge-opt">Opcional</span></div>
+        <div class="uc-sub">Upload do arquivo ou link do documento</div>
+        <div class="method-tabs">
+          <button class="mtab active" onclick="switchMethod('copy','file',this)">Upload</button>
+          <button class="mtab" onclick="switchMethod('copy','link',this)">Link Drive / Doc</button>
+        </div>
+        <div class="method-panel active" id="copy-method-file">
+          <label class="file-drop-zone" id="fdz-copy">
+            <input type="file" id="file-copy" accept=".pdf,.doc,.docx,.txt" onchange="handleFile('copy',this)">
+            <span class="fdz-icon" id="icon-copy">↑</span>
+            <span class="fdz-text" id="text-copy">Clique ou arraste</span>
+          </label>
+        </div>
+        <div class="method-panel" id="copy-method-link">
+          <div class="link-input-wrap">
+            <input type="url" id="copy-url" placeholder="https://drive.google.com/..." oninput="onUrlInput('copy')">
+            <span class="link-ok" id="copy-url-ok">✓</span>
+          </div>
+          <div class="fetch-status" id="copy-fetch-status"></div>
+        </div>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-ghost" onclick="goStep(2)">← Voltar</button>
+      <button class="btn btn-primary" onclick="goStep(4)">Continuar →</button>
+    </div>
+  </div>
+
+  <!-- ═ FASE 4 ═ -->
+  <div class="panel" id="panel-4">
+    <div class="phase-header"><div class="phase-num">04</div><div class="phase-info"><h2>Detalhamento do Cliente</h2><p>Contexto estratégico e direcionamentos — todos opcionais</p></div></div>
+    <div class="slabel">Identificação</div>
+    <div class="form-grid">
+      <div class="field full">
+        <label>Nome do empreendimento *</label>
+        <input type="text" id="f-nome" placeholder="Ex: Residencial Jardins Prime">
+      </div>
+    </div>
+    <div class="slabel">Deadline total</div>
+    <div class="form-grid">
+      <div class="field full">
+        <label>Data limite geral da entrega</label>
+        <input type="date" id="f-deadline">
+        <span class="hint">Opcional — data única para todas as entregas da campanha</span>
+      </div>
+    </div>
+    <div class="slabel">Contexto, foco e objetivo</div>
+    <div class="form-grid">
+      <div class="field full">
+        <label>Contexto, foco e objetivo da campanha</label>
+        <textarea id="f-foco" rows="5" placeholder="Descreva livremente: qual o objetivo? O que destacar nos criativos? Há algum problema de performance? Os criativos são novos ou rodam em paralelo? Como isso se alinha com o discurso comercial?"></textarea>
+      </div>
+    </div>
+    <div class="slabel">Formatos de materiais desejados</div>
+    <div class="form-grid">
+      <div class="field full">
+        <label>Formatos e especificações</label>
+        <textarea id="f-formatos" rows="4" placeholder="Ex:&#10;Posts estáticos — localização, lazer, tipologia&#10;Carrossel — um diferencial por tela&#10;Motion 30s — atributos gerais&#10;KV novo — estilo médio padrão, liberdade moderada"></textarea>
+        <span class="hint">Opcional — descreva formatos, durações, focos e qualquer especificação relevante</span>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-ghost" onclick="goStep(3)">← Voltar</button>
+      <button class="btn btn-primary" id="btn-4" onclick="goStep(5)" disabled>Gerar briefing →</button>
+    </div>
+  </div>
+
+  <!-- ═ FASE 5 ═ -->
+  <div class="panel" id="panel-5">
+    <div id="gen-view" class="generating">
+      <div class="gen-logo">F<span>&</span>MD</div>
+      <div class="gen-bar-wrap"><div class="gen-bar" id="gen-bar"></div></div>
+      <div class="gen-status" id="gen-status">Inicializando...</div>
+    </div>
+    <div id="err-view" class="error-view" style="display:none">
+      <h3>Erro ao processar</h3>
+      <p id="err-msg">Não foi possível gerar o briefing.</p>
+      <button class="btn btn-ghost" style="margin-right:8px" onclick="goStep(1)">← Recomeçar</button>
+      <button class="btn btn-primary" onclick="retryGeneration()">Tentar novamente</button>
+    </div>
+    <div id="res-view" style="display:none">
+      <div class="result-header">
+        <div><div class="res-title-lbl">Briefing gerado</div><div class="res-name" id="res-nome">—</div></div>
+        <div class="res-meta">
+          <div><strong>Deadline</strong><span id="rm-deadline">—</span></div>
+        </div>
+      </div>
+      <div id="res-body"></div>
+      <div class="copy-bar">
+        <div class="copy-bar-note">Clique em qualquer campo para <strong>editar</strong> · <strong style="color:#FF6B35">Laranja</strong> = verificar com o cliente</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="goStep(1)">Novo briefing</button>
+          <button class="btn btn-ghost" onclick="copyText()">Copiar texto</button>
+          <button class="btn btn-primary" id="btn-docx" onclick="downloadDocx()">Baixar .docx ↓</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main-app -->
+</div><!-- /wrap -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+let WORKER_URL = '';
+let API_KEY    = '';
+
+function loadConfig() {
+  WORKER_URL = localStorage.getItem('fmd_worker') || '';
+  API_KEY    = localStorage.getItem('fmd_apikey') || '';
+  if (WORKER_URL && API_KEY) {
+    showMainApp();
+  } else {
+    document.getElementById('setup-screen').style.display = 'flex';
+    document.getElementById('setup-screen').style.flexDirection = 'column';
+  }
+}
+
+function showMainApp() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+  document.getElementById('worker-url-display').textContent = WORKER_URL;
+}
+
+async function testWorker() {
+  const url = document.getElementById('cfg-worker').value.trim().replace(/\/$/, '');
+  const err = document.getElementById('worker-err');
+  err.style.display = 'none';
+  if (!url.startsWith('http')) { err.textContent = 'URL inválida.'; err.style.display = 'block'; return false; }
+  try {
+    const r = await fetch(url + '/fetch-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetUrl: 'https://example.com' })
+    });
+    if (!r.ok) throw new Error('status ' + r.status);
+    return true;
+  } catch(e) {
+    err.textContent = 'Não foi possível conectar: ' + e.message;
+    err.style.display = 'block';
+    return false;
+  }
+}
+
+async function saveConfig() {
+  const workerVal = document.getElementById('cfg-worker').value.trim().replace(/\/$/, '');
+  const keyVal    = document.getElementById('cfg-apikey').value.trim();
+  const werr = document.getElementById('worker-err');
+  const aerr = document.getElementById('apikey-err');
+  werr.style.display = 'none'; aerr.style.display = 'none';
+
+  if (!workerVal.startsWith('http')) { werr.textContent = 'URL do Worker inválida.'; werr.style.display = 'block'; return; }
+  if (!keyVal.startsWith('sk-ant-'))  { aerr.style.display = 'block'; return; }
+
+  const btn = document.getElementById('btn-start');
+  btn.textContent = 'Testando...'; btn.disabled = true;
+  const ok = await testWorker();
+  btn.textContent = 'Salvar e iniciar →'; btn.disabled = false;
+  if (!ok) return;
+
+  WORKER_URL = workerVal;
+  API_KEY    = keyVal;
+  localStorage.setItem('fmd_worker', WORKER_URL);
+  localStorage.setItem('fmd_apikey', API_KEY);
+  showMainApp();
+}
+
+function resetConfig() {
+  if (!confirm('Redefinir configurações?')) return;
+  localStorage.removeItem('fmd_worker');
+  localStorage.removeItem('fmd_apikey');
+  WORKER_URL = ''; API_KEY = '';
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'flex';
+}
+
+function showWorkerInstructions() {
+  const el = document.getElementById('worker-instructions');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+const files    = { lp: null, book: null, copy: null };
+const urlInputs = { lp: '', book: '', figma: '', drive: '', copy: '' };
+const fetched  = { lp: null, book: null, figma: null, drive: null, copy: null };
+// fetched[key] = { type: 'text'|'pdf', content: '...' } or null
+let currentStep = 1, briefingData = null;
+
+// ═══════════════════════════════════════════════════════════
+// FILE HANDLING
+// ═══════════════════════════════════════════════════════════
+function handleFile(key, input) {
+  const file = input.files[0]; if (!file) return;
+  files[key] = file;
+  const fdz  = document.getElementById('fdz-' + key);
+  const txt  = document.getElementById('text-' + key);
+  const ico  = document.getElementById('icon-' + key);
+  if (fdz) fdz.classList.add('has-file');
+  if (txt) txt.textContent = file.name.length > 28 ? file.name.slice(0,26)+'…' : file.name;
+  if (ico) ico.textContent = '✓';
+  if (key === 'lp') checkP1();
+}
+
+// ═══════════════════════════════════════════════════════════
+// URL INPUT + AUTO-FETCH via Worker
+// ═══════════════════════════════════════════════════════════
+const fetchTimers = {};
+
+function onUrlInput(key) {
+  const inputId = key === 'figma' || key === 'drive' ? key + '-url' : key + '-url';
+  const val = document.getElementById(inputId).value.trim();
+  urlInputs[key] = val;
+  fetched[key] = null;
+
+  const ok  = document.getElementById(key + '-url-ok');
+  const st  = document.getElementById(key + '-fetch-status');
+  if (ok) ok.style.display = 'none';
+  if (st) { st.className = 'fetch-status'; st.textContent = ''; }
+
+  if (!val.startsWith('http')) {
+    if (key === 'lp') checkP1();
+    return;
+  }
+
+  if (ok) ok.style.display = 'block';
+  if (key === 'lp') checkP1();
+
+  // debounce fetch by 1.2s after user stops typing
+  clearTimeout(fetchTimers[key]);
+  fetchTimers[key] = setTimeout(() => fetchUrl(key, val), 1200);
+}
+
+async function fetchUrl(key, url) {
+  const st = document.getElementById(key + '-fetch-status');
+  if (!st || !WORKER_URL) return;
+
+  st.className = 'fetch-status loading';
+  st.textContent = 'Buscando conteúdo...';
+
+  try {
+    const r = await fetch(WORKER_URL + '/fetch-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetUrl: url })
+    });
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+
+    fetched[key] = data; // { type, content }
+    st.className = 'fetch-status done';
+    st.textContent = data.type === 'pdf'
+      ? 'PDF carregado ✓'
+      : `Conteúdo lido ✓ (${Math.round(data.content.length / 100) / 10}k chars)`;
+  } catch(e) {
+    fetched[key] = null;
+    st.className = 'fetch-status fail';
+    st.textContent = 'Não foi possível ler o conteúdo — a URL será enviada como referência';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function checkP1() {
+  const hasLink = urlInputs.lp && urlInputs.lp.startsWith('http');
+  const hasFile = !!files.lp;
+  document.getElementById('btn-1').disabled = !(hasLink || hasFile);
+}
+
+function checkP4() {
+  document.getElementById('btn-4').disabled = !document.getElementById('f-nome').value.trim();
+}
+
+function switchMethod(group, method, btn) {
+  btn.parentElement.querySelectorAll('.mtab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  btn.closest('.upload-card').querySelectorAll('.method-panel').forEach(p => p.classList.remove('active'));
+  const t = document.getElementById(group + '-method-' + method);
+  if (t) t.classList.add('active');
+}
+
+function jumpTo(n) { if (n >= currentStep) return; setStep(n, true); }
+function goStep(n) { setStep(n, false); }
+
+function setStep(n, skipGen) {
+  currentStep = n;
+  [1,2,3,4,5].forEach(i => {
+    document.getElementById('panel-' + i).classList.toggle('active', i === n);
+    const tab = document.getElementById('stab-' + i);
+    tab.classList.remove('active','done');
+    if (i === n) tab.classList.add('active');
+    else if (i < n) tab.classList.add('done');
+  });
+  if (n === 5 && !skipGen) startGeneration();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ═══════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════
+async function toBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function mtype(file) {
+  if (file.type === 'application/pdf') return 'application/pdf';
+  if (file.type.startsWith('image/')) return file.type;
+  return 'application/pdf';
+}
+
+function fmtDate(d) {
+  return d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : 'A definir';
+}
+
+function isMissing(v) {
+  if (!v || v.trim() === '' || v === '—') return true;
+  const l = v.toLowerCase();
+  return l.includes('não identificado') || l.includes('a verificar') || l.includes('a definir') || l.includes('a informar');
+}
+
+function esc(s) {
+  return (s || '').replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,'\\n').replace(/\r/g,'');
+}
+
+// ═══════════════════════════════════════════════════════════
+// GENERATION STATUS
+// ═══════════════════════════════════════════════════════════
+const STATUS = [
+  [5,  'Preparando materiais...'],
+  [15, 'Lendo landing page...'],
+  [28, 'Carregando book do empreendimento...'],
+  [42, 'Processando criativos e referências...'],
+  [56, 'Analisando público-alvo e posicionamento...'],
+  [68, 'Mapeando diferenciais e localização...'],
+  [80, 'Verificando condições comerciais...'],
+  [90, 'Estruturando enxoval e KV...'],
+  [96, 'Finalizando briefing...'],
+];
+let statusTimer = null;
+
+function setBar(p) { document.getElementById('gen-bar').style.width = p + '%'; }
+function setSt(m)  { document.getElementById('gen-status').textContent = m; }
+
+function startStatusLoop() {
+  let si = 0;
+  const tick = () => {
+    if (si < STATUS.length) {
+      setBar(STATUS[si][0]); setSt(STATUS[si][1]); si++;
+      statusTimer = setTimeout(tick, 2200);
+    }
+  };
+  tick();
+}
+
+function stopStatusLoop() { clearTimeout(statusTimer); }
+
+// ═══════════════════════════════════════════════════════════
+// MAIN GENERATION
+// ═══════════════════════════════════════════════════════════
+async function startGeneration() {
+  document.getElementById('gen-view').style.display = 'block';
+  document.getElementById('res-view').style.display = 'none';
+  document.getElementById('err-view').style.display = 'none';
+  startStatusLoop();
+
+  try {
+    const nome     = document.getElementById('f-nome').value.trim();
+    const deadline = document.getElementById('f-deadline').value;
+    const foco     = document.getElementById('f-foco').value.trim();
+    const formatos = document.getElementById('f-formatos').value.trim();
+
+    // ── Build message content parts ───────────────────────
+    const parts = [];
+
+    // 1. Uploaded files → base64
+    for (const k of ['lp', 'book', 'copy']) {
+      if (!files[k]) continue;
+      const b64 = await toBase64(files[k]);
+      const mt  = mtype(files[k]);
+      if (mt === 'application/pdf') {
+        parts.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } });
+      } else {
+        parts.push({ type: 'image', source: { type: 'base64', media_type: mt, data: b64 } });
+      }
+    }
+
+    // 2. Fetched URL content → text or pdf blocks
+    const urlSources = [
+      { key: 'lp',    label: 'Landing Page' },
+      { key: 'book',  label: 'Book (Drive)' },
+      { key: 'figma', label: 'Figma (criativos)' },
+      { key: 'drive', label: 'Google Drive (criativos)' },
+      { key: 'copy',  label: 'Documento de Copy' },
+    ];
+
+    // Also fetch any pending URLs that haven't been fetched yet
+    for (const { key } of urlSources) {
+      const url = urlInputs[key];
+      if (!url || !url.startsWith('http')) continue;
+      if (!fetched[key] && !files[key]) {
+        try {
+          const r = await fetch(WORKER_URL + '/fetch-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetUrl: url })
+          });
+          const data = await r.json();
+          if (!data.error) fetched[key] = data;
+        } catch(e) { /* will use URL as text reference */ }
+      }
+    }
+
+    // Build context block from fetched content
+    let fetchedContext = '';
+    for (const { key, label } of urlSources) {
+      if (!fetched[key]) {
+        if (urlInputs[key]) fetchedContext += `\n[${label}] URL: ${urlInputs[key]} (conteúdo não disponível)\n`;
+        continue;
+      }
+      const f = fetched[key];
+      if (f.type === 'pdf') {
+        // Send as document block
+        parts.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.content } });
+        fetchedContext += `\n[${label}] PDF carregado como documento acima.\n`;
+      } else {
+        fetchedContext += `\n[${label}] URL: ${urlInputs[key]}\nCONTEÚDO:\n${f.content}\n---\n`;
+      }
+    }
+
+    // 3. Text prompt (always last)
+    const prompt = `Você é um especialista sênior em marketing imobiliário e estratégia de comunicação para campanhas de performance. Analise TODOS os materiais fornecidos (arquivos anexados + conteúdo dos links abaixo) e extraia o máximo de informações.
+
+DADOS DO CLIENTE:
+- Empreendimento: ${nome}
+- Deadline geral: ${deadline ? fmtDate(deadline) : 'não informado'}
+- Contexto, foco e objetivo: ${foco || 'não informado'}
+- Formatos desejados: ${formatos || 'não informado — sugira com base nos diferenciais'}
+${fetchedContext ? '\nCONTEÚDO DOS LINKS FORNECIDOS:\n' + fetchedContext : ''}
+
+DIRETRIZES:
+1. Identifique claramente os pontos fortes: planta/tipologia, localização, lazer, decorado, condições comerciais
+2. Alinhe com o discurso comercial do cliente
+3. Para enxoval: interprete os formatos desejados ou sugira com base nos diferenciais
+4. Motions 15s: sinalize que não cobre todos os atributos — 1 diferencial por peça
+5. Seja completo e objetivo
+
+Retorne SOMENTE JSON válido, sem texto antes ou depois:
+
+{
+  "produto": "${esc(nome)}",
+  "prazo": "${deadline ? fmtDate(deadline) : 'A definir'}",
+  "url": "${esc(urlInputs.lp || '')}",
+  "objetivo": "2-3 frases descrevendo o objetivo estratégico",
+  "contexto_campanha": "${esc(foco)}",
+  "formatos_solicitados": "${esc(formatos)}",
+  "publico": { "perfil": "", "faixa_etaria": "", "renda": "", "adicional": "" },
+  "proposta": { "mote": "", "diferencial": "", "posicionamento": "" },
+  "produto_info": { "status_obra": "", "lancamento": "", "entrega": "", "metragens": "", "unidades": "", "infraestrutura": "", "valor_m2": "", "decorado_stand": "", "lazer": "" },
+  "localizacao": { "acessos": "", "servicos": "", "pontos_fortes": "", "concorrentes": "" },
+  "diferenciais": { "lista": "", "vs_concorrentes": "", "melhor_que": "", "diferenciais_concorrente": "", "outros": "" },
+  "comercial": { "preco_medio": "", "pagamento": "", "texto_legal": "" },
+  "enxoval": { "posts_estaticos": [], "carrossel": "", "motion_duracao": "", "motion_obs": "", "kv_liberdade": "", "kv_nivel": "", "kv_estilo": "", "kv_obs": "" }
+}
+
+Preencha todos os campos vazios. posts_estaticos deve ser array de strings. Campos sem informação: "Não identificado nos materiais — verificar com o cliente"`;
+
+    parts.push({ type: 'text', text: prompt });
+
+    // ── Call API via Worker ────────────────────────────────
+    const resp = await fetch(WORKER_URL + '/api', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiKey: API_KEY,
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: parts }]
+      })
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.error || `Erro ${resp.status}`);
+    }
+
+    const apiData = await resp.json();
+
+    if (apiData.error) throw new Error(apiData.error.message || JSON.stringify(apiData.error));
+
+    const raw = apiData.content.map(c => c.text || '').join('');
+    const jsonStart = raw.indexOf('{');
+    const jsonEnd   = raw.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1) throw new Error('Resposta não contém JSON. Tente novamente.');
+    briefingData = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+
+    stopStatusLoop();
+    setBar(100); setSt('Briefing completo.');
+    setTimeout(() => {
+      document.getElementById('gen-view').style.display = 'none';
+      renderResult(briefingData);
+    }, 400);
+
+  } catch(err) {
+    stopStatusLoop();
+    console.error(err);
+    document.getElementById('gen-view').style.display = 'none';
+    document.getElementById('err-view').style.display = 'block';
+    document.getElementById('err-msg').textContent = err.message || 'Erro desconhecido. Tente novamente.';
+  }
+}
+
+function retryGeneration() {
+  document.getElementById('err-view').style.display = 'none';
+  document.getElementById('gen-view').style.display = 'block';
+  setBar(0); setSt('Reiniciando...');
+  startGeneration();
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER RESULT
+// ═══════════════════════════════════════════════════════════
+function rfItem(label, val, full) {
+  const miss = isMissing(val);
+  return `<div class="rf-item${full?' full':''}">
+    <div class="rf-label">${label}</div>
+    <div class="rf-value${miss?' missing':''}" contenteditable="true">${val||'Não identificado — verificar com o cliente'}</div>
+  </div>`;
+}
+
+function renderResult(d) {
+  document.getElementById('res-nome').textContent    = d.produto || '—';
+  document.getElementById('rm-deadline').textContent = d.prazo   || '—';
+
+  const pi  = d.produto_info || {};
+  const pub = d.publico      || {};
+  const pro = d.proposta     || {};
+  const loc = d.localizacao  || {};
+  const dif = d.diferenciais || {};
+  const com = d.comercial    || {};
+  const env = d.enxoval      || {};
+  const postsArr = Array.isArray(env.posts_estaticos)
+    ? env.posts_estaticos
+    : (typeof env.posts_estaticos==='string' ? env.posts_estaticos.split('\n').filter(l=>l.trim()) : []);
+
+  const secs = [
+    { num:'01', title:'Objetivo', open:true, fields:[
+      ['Objetivo estratégico',        d.objetivo,           true],
+      ['Contexto da campanha',        d.contexto_campanha,  true],
+      ['Formatos solicitados',        d.formatos_solicitados,true],
+    ]},
+    { num:'02', title:'Público-Alvo', open:false, fields:[
+      ['Perfil principal',            pub.perfil,       false],
+      ['Faixa etária',                pub.faixa_etaria, false],
+      ['Renda estimada',              pub.renda,        false],
+      ['Informações adicionais',      pub.adicional,    true],
+    ]},
+    { num:'03', title:'Proposta de Valor', open:false, fields:[
+      ['Mote da campanha',            pro.mote,           true],
+      ['Diferencial central',         pro.diferencial,    false],
+      ['Posicionamento',              pro.posicionamento, false],
+    ]},
+    { num:'04', title:'Produto', open:false, fields:[
+      ['Status da obra',              pi.status_obra,    false],
+      ['Lançamento',                  pi.lancamento,     false],
+      ['Previsão de entrega',         pi.entrega,        false],
+      ['Metragens',                   pi.metragens,      false],
+      ['Quantidade de unidades',      pi.unidades,       false],
+      ['Valor por m²',                pi.valor_m2,       false],
+      ['Decorado / Stand',            pi.decorado_stand, false],
+      ['Infraestrutura',              pi.infraestrutura, true],
+      ['Principais itens de lazer',   pi.lazer,          true],
+    ]},
+    { num:'05', title:'Localização & Entorno', open:false, fields:[
+      ['Principais acessos',          loc.acessos,       false],
+      ['Serviços próximos',           loc.servicos,      false],
+      ['Pontos fortes da região',     loc.pontos_fortes, true],
+      ['Concorrentes na região',      loc.concorrentes,  true],
+    ]},
+    { num:'06', title:'Diferenciais Competitivos', open:false, fields:[
+      ['Diferenciais do produto',              dif.lista,                   true],
+      ['O que tem que o concorrente não tem',  dif.vs_concorrentes,         true],
+      ['O que faz melhor',                     dif.melhor_que,              true],
+      ['Diferenciais do concorrente',          dif.diferenciais_concorrente,true],
+      ['Outros pontos de atenção',             dif.outros,                  true],
+    ]},
+    { num:'07', title:'Condições Comerciais', open:false, fields:[
+      ['Preço médio',                 com.preco_medio, false],
+      ['Condições de pagamento',      com.pagamento,   false],
+      ['Texto legal',                 com.texto_legal, true],
+    ]},
+    { num:'08', title:'Direcionamento de Enxoval', open:false, fields:[
+      ['Posts estáticos',             postsArr.join('\n'), true],
+      ['Carrosséis',                  env.carrossel,       true],
+      ['Motion — duração',            env.motion_duracao,  false],
+      ['Motion — observações',        env.motion_obs,      false],
+      ['KV — liberdade criativa',     env.kv_liberdade,    false],
+      ['KV — nível de mudança',       env.kv_nivel,        false],
+      ['KV — estilo',                 env.kv_estilo,       false],
+      ['KV — observações',            env.kv_obs,          true],
+    ]},
+  ];
+
+  let html = '<div class="accordion">';
+  secs.forEach(s => {
+    const hasMissing = s.fields.some(([,v]) => isMissing(v));
+    let fh = '<div class="rf-grid">';
+    s.fields.forEach(([l,v,f]) => fh += rfItem(l,v,f));
+    fh += '</div>';
+    html += `<div class="acc-item${s.open?' open':''}${hasMissing?' has-missing':''}">
+      <div class="acc-header" onclick="this.closest('.acc-item').classList.toggle('open')">
+        <div class="acc-left">
+          <span class="acc-num">${s.num}</span>
+          <span class="acc-title">${s.title}</span>
+          ${hasMissing?'<span class="missing-dot" title="Verificar com o cliente"></span>':''}
+        </div>
+        <div class="acc-arrow"></div>
+      </div>
+      <div class="acc-body">${fh}</div>
+    </div>`;
+  });
+  html += '</div>';
+  document.getElementById('res-body').innerHTML = html;
+  document.getElementById('res-view').style.display = 'block';
+}
+
+// ═══════════════════════════════════════════════════════════
+// COLLECT EDITED DATA
+// ═══════════════════════════════════════════════════════════
+function collectData() {
+  if (!briefingData) return null;
+  const d = JSON.parse(JSON.stringify(briefingData));
+  const secEls = document.querySelectorAll('.acc-item');
+  const map = [
+    ['objetivo','contexto_campanha','formatos_solicitados'],
+    ['publico.perfil','publico.faixa_etaria','publico.renda','publico.adicional'],
+    ['proposta.mote','proposta.diferencial','proposta.posicionamento'],
+    ['produto_info.status_obra','produto_info.lancamento','produto_info.entrega','produto_info.metragens','produto_info.unidades','produto_info.valor_m2','produto_info.decorado_stand','produto_info.infraestrutura','produto_info.lazer'],
+    ['localizacao.acessos','localizacao.servicos','localizacao.pontos_fortes','localizacao.concorrentes'],
+    ['diferenciais.lista','diferenciais.vs_concorrentes','diferenciais.melhor_que','diferenciais.diferenciais_concorrente','diferenciais.outros'],
+    ['comercial.preco_medio','comercial.pagamento','comercial.texto_legal'],
+    ['_posts','enxoval.carrossel','enxoval.motion_duracao','enxoval.motion_obs','enxoval.kv_liberdade','enxoval.kv_nivel','enxoval.kv_estilo','enxoval.kv_obs'],
+  ];
+  secEls.forEach((sec, si) => {
+    if (si >= map.length) return;
+    sec.querySelectorAll('.rf-value').forEach((el, i) => {
+      if (i >= map[si].length) return;
+      const key = map[si][i], val = el.textContent.trim();
+      if (key === '_posts') { d.enxoval = d.enxoval||{}; d.enxoval.posts_estaticos = val.split('\n').filter(l=>l.trim()); }
+      else if (key.includes('.')) { const [o,p] = key.split('.'); d[o]=d[o]||{}; d[o][p]=val; }
+      else d[key] = val;
+    });
+  });
+  return d;
+}
+
+// ═══════════════════════════════════════════════════════════
+// DOCX GENERATION (client-side)
+// ═══════════════════════════════════════════════════════════
+async function downloadDocx() {
+  const btn = document.getElementById('btn-docx');
+  btn.textContent = 'Gerando...'; btn.disabled = true;
+  try {
+    if (typeof docx === 'undefined') throw new Error('Biblioteca docx não carregada. Verifique conexão.');
+    const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+            AlignmentType, BorderStyle, WidthType, ShadingType, LevelFormat, Footer } = docx;
+
+    const d   = collectData() || briefingData;
+    const CW  = 9746, C1 = Math.floor(CW*.36), C2 = CW-C1;
+    const nb  = { style: BorderStyle.NONE, size:0, color:'FFFFFF' };
+    const nob = { top:nb, bottom:nb, left:nb, right:nb };
+
+    const lbl  = t => new TextRun({ text:t, font:'Arial', size:18, bold:true, color:'555555', allCaps:true });
+    const val  = t => new TextRun({ text:t||'—', font:'Arial', size:22, color:'1A1A1A' });
+    const row2 = (l,v) => new TableRow({ children:[
+      new TableCell({ borders:nob, width:{size:C1,type:WidthType.DXA}, shading:{fill:'F2F2F2',type:ShadingType.CLEAR}, margins:{top:80,bottom:80,left:140,right:80}, children:[new Paragraph({children:[lbl(l)]})] }),
+      new TableCell({ borders:nob, width:{size:C2,type:WidthType.DXA}, shading:{fill:'FFFFFF',type:ShadingType.CLEAR}, margins:{top:80,bottom:80,left:140,right:80}, children:[new Paragraph({children:[val(v)]})] }),
+    ]});
+    const tbl = rows => new Table({ width:{size:CW,type:WidthType.DXA}, columnWidths:[C1,C2], rows });
+    const secT = (n,t) => new Paragraph({
+      spacing:{before:340,after:100},
+      border:{bottom:{style:BorderStyle.SINGLE,size:8,color:'000000',space:4}},
+      children:[
+        new TextRun({text:n+'.  ',font:'Arial',size:26,bold:true,color:'000000'}),
+        new TextRun({text:t.toUpperCase(),font:'Arial',size:26,bold:true,color:'000000'}),
+      ]
+    });
+    const bullet = t => new Paragraph({
+      numbering:{reference:'bullets',level:0}, spacing:{before:60,after:60},
+      children:[new TextRun({text:t,font:'Arial',size:22,color:'1A1A1A'})]
+    });
+
+    const pi=d.produto_info||{}, pub=d.publico||{}, pro=d.proposta||{};
+    const loc=d.localizacao||{}, dif=d.diferenciais||{}, com=d.comercial||{}, env=d.enxoval||{};
+    const postsArr = Array.isArray(env.posts_estaticos) ? env.posts_estaticos
+      : (typeof env.posts_estaticos==='string' ? env.posts_estaticos.split('\n').filter(l=>l.trim()) : []);
+
+    const cw3 = Math.floor(CW/3);
+    const children = [
+      new Paragraph({spacing:{before:0,after:40},children:[new TextRun({text:'F&MD',font:'Arial',size:52,bold:true,color:'000000'})]}),
+      new Paragraph({spacing:{before:0,after:360},children:[new TextRun({text:'BRIEFING DE CAMPANHA — IMOBILIÁRIO',font:'Arial',size:20,allCaps:true,color:'555555'})]}),
+
+      // Cover table
+      new Table({ width:{size:CW,type:WidthType.DXA}, columnWidths:[cw3,cw3,CW-cw3*2], rows:[
+        new TableRow({children:[new TableCell({borders:nob,columnSpan:3,width:{size:CW,type:WidthType.DXA},shading:{fill:'000000',type:ShadingType.CLEAR},margins:{top:200,bottom:80,left:160,right:160},children:[new Paragraph({children:[new TextRun({text:(d.produto||'').toUpperCase(),font:'Arial',size:52,bold:true,color:'FFFFFF'})]})]})]}),
+        new TableRow({children:[new TableCell({borders:nob,columnSpan:3,width:{size:CW,type:WidthType.DXA},shading:{fill:'000000',type:ShadingType.CLEAR},margins:{top:40,bottom:80,left:160,right:160},children:[new Paragraph({children:[new TextRun({text:'URL: ',font:'Arial',size:18,bold:true,color:'666666'}),new TextRun({text:d.url||'—',font:'Arial',size:18,color:'E1FF15'})]})]})]}),
+        new TableRow({children:[
+          new TableCell({borders:nob,width:{size:cw3,type:WidthType.DXA},shading:{fill:'000000',type:ShadingType.CLEAR},margins:{top:120,bottom:200,left:160,right:80},children:[new Paragraph({children:[new TextRun({text:'DEADLINE',font:'Arial',size:16,bold:true,color:'666666',allCaps:true})]}),new Paragraph({children:[new TextRun({text:d.prazo||'—',font:'Arial',size:22,bold:true,color:'E1FF15'})]})]})  ,
+          new TableCell({borders:nob,width:{size:cw3,type:WidthType.DXA},shading:{fill:'000000',type:ShadingType.CLEAR},margins:{top:120,bottom:200,left:160,right:80},children:[new Paragraph({children:[new TextRun({text:'EMPREENDIMENTO',font:'Arial',size:16,bold:true,color:'666666',allCaps:true})]}),new Paragraph({children:[new TextRun({text:d.produto||'—',font:'Arial',size:22,bold:true,color:'FFFFFF'})]})]})  ,
+          new TableCell({borders:nob,width:{size:CW-cw3*2,type:WidthType.DXA},shading:{fill:'000000',type:ShadingType.CLEAR},margins:{top:120,bottom:200,left:160,right:80},children:[new Paragraph({children:[new TextRun({text:'STATUS',font:'Arial',size:16,bold:true,color:'666666',allCaps:true})]}),new Paragraph({children:[new TextRun({text:pi.status_obra||'—',font:'Arial',size:22,bold:true,color:'FFFFFF'})]})]})  ,
+        ]}),
+      ]}),
+
+      secT('1','Objetivo'),
+      new Paragraph({spacing:{before:80,after:40},children:[lbl('Objetivo estratégico')]}),
+      new Paragraph({spacing:{before:0,after:80},children:[val(d.objetivo)]}),
+      ...(d.contexto_campanha ? [new Paragraph({spacing:{before:100,after:40},children:[lbl('Contexto da campanha')]}),new Paragraph({spacing:{before:0,after:80},children:[val(d.contexto_campanha)]})] : []),
+      ...(d.formatos_solicitados ? [new Paragraph({spacing:{before:100,after:40},children:[lbl('Formatos solicitados')]}),new Paragraph({spacing:{before:0,after:80},children:[val(d.formatos_solicitados)]})] : []),
+
+      secT('2','Público-Alvo'),
+      tbl([row2('Perfil principal',pub.perfil||'—'),row2('Faixa etária',pub.faixa_etaria||'—'),row2('Renda estimada',pub.renda||'—'),row2('Informações adicionais',pub.adicional||'—')]),
+
+      secT('3','Proposta de Valor'),
+      tbl([row2('Mote da campanha',pro.mote||'—'),row2('Diferencial central',pro.diferencial||'—'),row2('Posicionamento',pro.posicionamento||'—')]),
+
+      secT('4','Produto'),
+      tbl([row2('Status da obra',pi.status_obra||'—'),row2('Lançamento',pi.lancamento||'—'),row2('Previsão de entrega',pi.entrega||'—'),row2('Metragens',pi.metragens||'—'),row2('Unidades',pi.unidades||'—'),row2('Valor por m²',pi.valor_m2||'—'),row2('Decorado / Stand',pi.decorado_stand||'—'),row2('Infraestrutura',pi.infraestrutura||'—'),row2('Principais itens de lazer',pi.lazer||'—')]),
+
+      secT('5','Localização & Entorno'),
+      tbl([row2('Principais acessos',loc.acessos||'—'),row2('Serviços próximos',loc.servicos||'—'),row2('Pontos fortes da região',loc.pontos_fortes||'—'),row2('Concorrentes na região',loc.concorrentes||'—')]),
+
+      secT('6','Diferenciais Competitivos'),
+      tbl([row2('Diferenciais do produto',dif.lista||'—'),row2('O que tem que o concorrente não tem',dif.vs_concorrentes||'—'),row2('O que faz melhor',dif.melhor_que||'—'),row2('Diferenciais do concorrente',dif.diferenciais_concorrente||'—'),row2('Outros pontos de atenção',dif.outros||'—')]),
+
+      secT('7','Condições Comerciais'),
+      tbl([row2('Preço médio',com.preco_medio||'—'),row2('Condições de pagamento',com.pagamento||'—'),row2('Texto legal',com.texto_legal||'—')]),
+
+      secT('8','Direcionamento de Enxoval'),
+      new Paragraph({spacing:{before:160,after:80},children:[new TextRun({text:'Posts Estáticos',font:'Arial',size:24,bold:true,color:'000000'})]}),
+      ...postsArr.map(p => bullet(p)),
+      new Paragraph({spacing:{before:180,after:80},children:[new TextRun({text:'Carrosséis',font:'Arial',size:24,bold:true,color:'000000'})]}),
+      new Paragraph({spacing:{before:0,after:80},children:[val(env.carrossel||'—')]}),
+      new Paragraph({spacing:{before:180,after:80},children:[new TextRun({text:'Motions (Vídeo)',font:'Arial',size:24,bold:true,color:'000000'})]}),
+      tbl([row2('Duração',env.motion_duracao||'—'),row2('Observações',env.motion_obs||'—')]),
+      new Paragraph({spacing:{before:180,after:80},children:[new TextRun({text:'Proposta de KV',font:'Arial',size:24,bold:true,color:'000000'})]}),
+      tbl([row2('Liberdade criativa',env.kv_liberdade||'—'),row2('Nível de mudança',env.kv_nivel||'—'),row2('Estilo',env.kv_estilo||'—'),row2('Observações',env.kv_obs||'—')]),
+    ];
+
+    const document = new Document({
+      numbering:{ config:[{ reference:'bullets', levels:[{ level:0, format:LevelFormat.BULLET, text:'•', alignment:AlignmentType.LEFT, style:{ paragraph:{ indent:{ left:720, hanging:360 } } } }] }] },
+      styles:{ default:{ document:{ run:{ font:'Arial', size:22 } } } },
+      sections:[{
+        properties:{ page:{ size:{width:11906,height:16838}, margin:{top:1080,right:1080,bottom:1080,left:1080} } },
+        footers:{ default: new Footer({ children:[
+          new Paragraph({ border:{top:{style:BorderStyle.SINGLE,size:4,color:'000000',space:4}}, spacing:{before:120}, children:[
+            new TextRun({text:'F&MD  ·  Briefing Imobiliário  ·  ',font:'Arial',size:16,color:'555555'}),
+            new TextRun({text:d.produto||'',font:'Arial',size:16,bold:true,color:'000000'}),
+          ]})
+        ]})},
+        children
+      }]
+    });
+
+    const buffer = await Packer.toBuffer(document);
+    const blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'briefing-' + (d.produto||'empreendimento').toLowerCase().replace(/\s+/g,'-') + '.docx';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Download iniciado!');
+  } catch(err) {
+    console.error(err);
+    showToast('Erro ao gerar .docx');
+    alert('Erro: ' + err.message);
+  } finally {
+    btn.textContent = 'Baixar .docx ↓'; btn.disabled = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// COPY TEXT
+// ═══════════════════════════════════════════════════════════
+function copyText() {
+  const secs = document.querySelectorAll('.acc-item');
+  const nome = document.getElementById('res-nome').textContent;
+  let t = 'F&MD — BRIEFING DE CAMPANHA\n' + '='.repeat(48) + '\nPRODUTO: ' + nome + '\n\n';
+  secs.forEach(s => {
+    t += s.querySelector('.acc-num').textContent + '. ' + s.querySelector('.acc-title').textContent.toUpperCase() + '\n';
+    s.querySelectorAll('.rf-item').forEach(f => {
+      t += '  ' + f.querySelector('.rf-label').textContent + ': ' + f.querySelector('.rf-value').textContent + '\n';
+    });
+    t += '\n';
+  });
+  navigator.clipboard.writeText(t.trim()).then(() => showToast('Copiado!')).catch(() => showToast('Erro ao copiar'));
+}
+
+// ═══════════════════════════════════════════════════════════
+// TOAST + DRAG/DROP + INIT
+// ═══════════════════════════════════════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+['lp','book','copy'].forEach(key => {
+  const zone = document.getElementById('fdz-' + key);
+  if (!zone) return;
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor='#E1FF15'; });
+  zone.addEventListener('dragleave', () => { zone.style.borderColor=''; });
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.style.borderColor='';
+    const file = e.dataTransfer.files[0];
+    if (file) { files[key]=file; zone.classList.add('has-file'); document.getElementById('text-'+key).textContent=file.name.length>28?file.name.slice(0,26)+'…':file.name; document.getElementById('icon-'+key).textContent='✓'; if(key==='lp')checkP1(); }
+  });
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('f-nome').addEventListener('input', checkP4);
+  loadConfig();
+});
+</script>
+</body>
+</html>
